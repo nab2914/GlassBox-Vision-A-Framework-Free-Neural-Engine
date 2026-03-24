@@ -140,17 +140,23 @@ plt.savefig('deep_convergence.png')
 print("Saved 'deep_convergence.png'.")
 print("\nLaunching Web Interface...")
 
+# ... [Keep all your imports and training code above exactly as is] ...
+
+# ==========================================
+# 1. DEFINE ALL FUNCTIONS FIRST
+# ==========================================
+
 def recognize_digit(drawing):
     if drawing is None or drawing["composite"] is None:
         return "Please draw a number!", None
     
     image = drawing["composite"]
     
-    # 1. Grayscale and Invert 
+    # Grayscale and Invert 
     img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     img_gray = cv2.bitwise_not(img_gray)
     
-    # 2. Thresholding and Cropping
+    # Thresholding and Cropping
     _, thresh = cv2.threshold(img_gray, 128, 255, cv2.THRESH_BINARY)
     coords = cv2.findNonZero(thresh)
     if coords is None:
@@ -159,14 +165,14 @@ def recognize_digit(drawing):
     x, y, w, h = cv2.boundingRect(coords)
     digit = thresh[y:y+h, x:x+w]
     
-    # 3. Padding and Resizing
+    # Padding and Resizing
     max_dim = max(w, h)
     pad_w = (max_dim - w) // 2
     pad_h = (max_dim - h) // 2
     padded_digit = cv2.copyMakeBorder(digit, pad_h + 20, pad_h + 20, pad_w + 20, pad_w + 20, cv2.BORDER_CONSTANT, value=0)
     img_resized = cv2.resize(padded_digit, (28, 28), interpolation=cv2.INTER_AREA)
     
-    # 4. Normalize and Predict
+    # Normalize and Predict
     img_normalized = img_resized / 255.0
     img_flattened = img_normalized.reshape(1, 784)
     
@@ -174,12 +180,10 @@ def recognize_digit(drawing):
     predicted_number = np.argmax(prediction, axis=1)[0]
     confidence = np.max(prediction) * 100
     
-    # --- NEW: MATPLOTLIB BAR CHART ---
-    # Extract the probabilities for digits 0-9
+    # MATPLOTLIB BAR CHART
     probs = prediction[0] * 100 
     
     fig = plt.figure(figsize=(6, 4))
-    # Create a bar chart (Grey for all, Blue for the winning prediction)
     colors = ['#cccccc'] * 10
     colors[predicted_number] = '#3b82f6' 
     
@@ -192,49 +196,14 @@ def recognize_digit(drawing):
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
     
-    # Return the text AND the matplotlib figure
     return f"Prediction: {predicted_number} \nConfidence: {confidence:.2f}%", fig
-
-
-# --- THE PRESENTATION-READY UI ---
-with gr.Blocks(theme=gr.themes.Monochrome()) as interface:
-    gr.Markdown("# GlassBox Vision: Framework-Free Neural Engine")
-    gr.Markdown("Draw a digit (0-9). The custom math engine will process the pixels and predict the number in real-time.")
-    
-    with gr.Row():
-        with gr.Column(scale=1):
-            sketchpad = gr.Sketchpad(
-                type="numpy", 
-                label="Digital Canvas", 
-                interactive=True,
-                brush=gr.Brush(colors=["#000000"], default_size=20)
-            )
-            predict_btn = gr.Button("1. Process & Predict", variant="primary")
-            output_text = gr.Textbox(label="Final Output")
-            
-        with gr.Column(scale=1):
-            # This is where the Matplotlib chart will appear!
-            output_plot = gr.Plot(label="Internal Probability Distribution")
-            
-    # THE SLIDING WINDOW (Accordion)
-    with gr.Accordion("Advanced: Continuous Learning Flywheel (Click to Expand)", open=False):
-        gr.Markdown("Did the engine struggle with your handwriting? Provide the correct label to append this 28x28 matrix to `my_handwriting.csv` for the next training cycle.")
-        with gr.Row():
-            correct_label = gr.Textbox(label="Correct Digit (0-9)")
-            save_btn = gr.Button("2. Inject into Custom Dataset")
-            save_status = gr.Textbox(label="Database Status")
-            
-    # Connect everything
-    predict_btn.click(fn=recognize_digit, inputs=sketchpad, outputs=[output_text, output_plot])
-    save_btn.click(fn=save_to_dataset, inputs=[sketchpad, correct_label], outputs=[save_status, sketchpad, correct_label])
-
-interface.launch()
 
 def save_to_dataset(drawing, true_label):
     if drawing is None or drawing["composite"] is None:
-        return "Please draw a number first."
+        # Return 3 things to match the 3 outputs in the UI (status, canvas, label)
+        return "Please draw a number first.", None, true_label
     if not true_label.isdigit():
-        return "Please type a valid number (0-9)."
+        return "Please type a valid number (0-9).", drawing, true_label
         
     image = drawing["composite"]
     
@@ -245,7 +214,7 @@ def save_to_dataset(drawing, true_label):
     coords = cv2.findNonZero(thresh)
     
     if coords is None:
-        return "Canvas is blank!"
+        return "Canvas is blank!", None, true_label
         
     x, y, w, h = cv2.boundingRect(coords)
     digit = thresh[y:y+h, x:x+w]
@@ -274,27 +243,56 @@ def save_to_dataset(drawing, true_label):
             writer.writerow(header)
         writer.writerow(row)
         
-    return f"Success! Added your '{true_label}' to my_handwriting.csv"
+    # Return success message, clear the canvas (None), and clear the label input ("")
+    return f"Success! Added your '{true_label}' to my_handwriting.csv", None, ""
 
-# --- THE NEW GLASSBOX UI ---
-with gr.Blocks(theme=gr.themes.Monochrome()) as interface:
-    gr.Markdown("# GlassBox Engine: Vision Subsystem")
-    gr.Markdown("Draw a digit(0-9). If the engine guesses wrong, correct it and save it to your personal dataset to make the AI smarter.")
+# ==========================================
+# 2. BUILD THE UI (Only ONE interface block)
+# ==========================================
+
+# Note: Removed the theme argument from here to fix the Gradio 6.0 warning
+with gr.Blocks() as interface:
+    gr.Markdown("# GlassBox Vision: Framework-Free Neural Engine")
+    gr.Markdown("Draw a digit (0-9). The custom math engine will process the pixels and predict the number in real-time.")
     
     with gr.Row():
-        with gr.Column():
-            sketchpad = gr.Sketchpad(type="numpy", label="Draw Here",interactive=True,brush=gr.Brush(colors=["#000000"], default_size=20))
-            predict_btn = gr.Button("Guess the Number", variant="primary")
-            output_text = gr.Textbox(label="Engine Output")
+        with gr.Column(scale=1):
+            sketchpad = gr.Sketchpad(
+                type="numpy", 
+                label="Digital Canvas", 
+                interactive=True,
+                brush=gr.Brush(colors=["#000000"], default_size=20)
+            )
             
-        with gr.Column():
-            gr.Markdown("### Continuous Learning (Data Flywheel)")
-            correct_label = gr.Textbox(label="What number did you actually draw?")
-            save_btn = gr.Button("Save to Personal Dataset")
+            with gr.Row():
+                predict_btn = gr.Button("1. Process & Predict", variant="primary")
+                
+            output_text = gr.Textbox(label="Final Output")
+            
+        with gr.Column(scale=1):
+            # The Matplotlib chart will appear here
+            output_plot = gr.Plot(label="Internal Probability Distribution")
+            
+    # THE SLIDING WINDOW (Accordion) for Data Collection
+    with gr.Accordion("Advanced: Continuous Learning Flywheel (Click to Expand)", open=False):
+        gr.Markdown("Did the engine struggle with your handwriting? Provide the correct label to append this 28x28 matrix to `my_handwriting.csv` for the next training cycle.")
+        with gr.Row():
+            correct_label = gr.Textbox(label="Correct Digit (0-9)")
+            save_btn = gr.Button("2. Inject into Custom Dataset")
             save_status = gr.Textbox(label="Database Status")
             
-    # Connect the buttons to the functions
-    predict_btn.click(fn=recognize_digit, inputs=sketchpad, outputs=output_text)
-    save_btn.click(fn=save_to_dataset, inputs=[sketchpad, correct_label], outputs=save_status)
+    # Wire up the buttons
+    predict_btn.click(
+        fn=recognize_digit, 
+        inputs=sketchpad, 
+        outputs=[output_text, output_plot] # Matches the 2 returns in recognize_digit
+    )
+    
+    save_btn.click(
+        fn=save_to_dataset, 
+        inputs=[sketchpad, correct_label], 
+        outputs=[save_status, sketchpad, correct_label] # Matches the 3 returns in save_to_dataset
+    )
 
-interface.launch()
+# Launch with the theme applied here instead!
+interface.launch(theme=gr.themes.Monochrome())
