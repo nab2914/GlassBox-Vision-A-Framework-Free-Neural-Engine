@@ -142,45 +142,94 @@ print("\nLaunching Web Interface...")
 
 def recognize_digit(drawing):
     if drawing is None or drawing["composite"] is None:
-        return "Please draw a number!"
+        return "Please draw a number!", None
     
     image = drawing["composite"]
     
-    # 1. Grayscale and Invert (White ink on Black background)
+    # 1. Grayscale and Invert 
     img_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     img_gray = cv2.bitwise_not(img_gray)
     
-    # 2. Thresholding: Force all faint gray pixels to be solid white
+    # 2. Thresholding and Cropping
     _, thresh = cv2.threshold(img_gray, 128, 255, cv2.THRESH_BINARY)
-    
-    # 3. Find the exact bounding box of your drawing to crop out dead space
     coords = cv2.findNonZero(thresh)
     if coords is None:
-        return "Please draw a number!"
+        return "Please draw a number!", None
+        
     x, y, w, h = cv2.boundingRect(coords)
     digit = thresh[y:y+h, x:x+w]
     
-    # 4. Add perfect padding to make it a square (like the MNIST dataset)
+    # 3. Padding and Resizing
     max_dim = max(w, h)
     pad_w = (max_dim - w) // 2
     pad_h = (max_dim - h) // 2
-    # Add a 20-pixel border so the number doesn't touch the edges
     padded_digit = cv2.copyMakeBorder(digit, pad_h + 20, pad_h + 20, pad_w + 20, pad_w + 20, cv2.BORDER_CONSTANT, value=0)
-    
-    # 5. Shrink to exactly 28x28
     img_resized = cv2.resize(padded_digit, (28, 28), interpolation=cv2.INTER_AREA)
     
-    # 6. Normalize and Flatten
+    # 4. Normalize and Predict
     img_normalized = img_resized / 255.0
     img_flattened = img_normalized.reshape(1, 784)
     
-    # 7. Predict!
     prediction = model.forward(img_flattened)
     predicted_number = np.argmax(prediction, axis=1)[0]
     confidence = np.max(prediction) * 100
     
-    return f"Prediction: {predicted_number} \nConfidence: {confidence:.2f}%"
+    # --- NEW: MATPLOTLIB BAR CHART ---
+    # Extract the probabilities for digits 0-9
+    probs = prediction[0] * 100 
     
+    fig = plt.figure(figsize=(6, 4))
+    # Create a bar chart (Grey for all, Blue for the winning prediction)
+    colors = ['#cccccc'] * 10
+    colors[predicted_number] = '#3b82f6' 
+    
+    plt.bar(range(10), probs, color=colors, edgecolor='black')
+    plt.xticks(range(10))
+    plt.xlabel('Digit Class (0-9)', fontweight='bold')
+    plt.ylabel('Network Confidence (%)', fontweight='bold')
+    plt.title('Live Neural Activation', fontweight='bold')
+    plt.ylim(0, 100)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    
+    # Return the text AND the matplotlib figure
+    return f"Prediction: {predicted_number} \nConfidence: {confidence:.2f}%", fig
+
+
+# --- THE PRESENTATION-READY UI ---
+with gr.Blocks(theme=gr.themes.Monochrome()) as interface:
+    gr.Markdown("# GlassBox Vision: Framework-Free Neural Engine")
+    gr.Markdown("Draw a digit (0-9). The custom math engine will process the pixels and predict the number in real-time.")
+    
+    with gr.Row():
+        with gr.Column(scale=1):
+            sketchpad = gr.Sketchpad(
+                type="numpy", 
+                label="Digital Canvas", 
+                interactive=True,
+                brush=gr.Brush(colors=["#000000"], default_size=20)
+            )
+            predict_btn = gr.Button("1. Process & Predict", variant="primary")
+            output_text = gr.Textbox(label="Final Output")
+            
+        with gr.Column(scale=1):
+            # This is where the Matplotlib chart will appear!
+            output_plot = gr.Plot(label="Internal Probability Distribution")
+            
+    # THE SLIDING WINDOW (Accordion)
+    with gr.Accordion("Advanced: Continuous Learning Flywheel (Click to Expand)", open=False):
+        gr.Markdown("Did the engine struggle with your handwriting? Provide the correct label to append this 28x28 matrix to `my_handwriting.csv` for the next training cycle.")
+        with gr.Row():
+            correct_label = gr.Textbox(label="Correct Digit (0-9)")
+            save_btn = gr.Button("2. Inject into Custom Dataset")
+            save_status = gr.Textbox(label="Database Status")
+            
+    # Connect everything
+    predict_btn.click(fn=recognize_digit, inputs=sketchpad, outputs=[output_text, output_plot])
+    save_btn.click(fn=save_to_dataset, inputs=[sketchpad, correct_label], outputs=[save_status, sketchpad, correct_label])
+
+interface.launch()
+
 def save_to_dataset(drawing, true_label):
     if drawing is None or drawing["composite"] is None:
         return "Please draw a number first."
