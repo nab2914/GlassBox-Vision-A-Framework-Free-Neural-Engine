@@ -12,19 +12,23 @@ import csv
 
 print("Initializing Deep Neural Network Engine...\n")
 
-# --- 1. LOAD MNIST DATA ---
-print("Loading MNIST Dataset (This may take a few seconds)...")
-# Using pure NumPy to load the CSV. 
-data = np.loadtxt('data/mnist.csv', delimiter=',', skiprows=1)
-# Check if your custom dataset exists, and if so, load it!
-if os.path.exists('data/my_handwriting.csv'):
-    print("Loading Custom Handwriting Data...")
-    custom_data = np.loadtxt('data/my_handwriting.csv', delimiter=',', skiprows=1)
+# # --- 1. LOAD MNIST DATA ---
+# print("Loading MNIST Dataset (This may take a few seconds)...")
+# # Using pure NumPy to load the CSV. 
+# data = np.loadtxt('data/mnist.csv', delimiter=',', skiprows=1)
+# # Check if your custom dataset exists, and if so, load it!
+# if os.path.exists('data/my_handwriting.csv'):
+#     print("Loading Custom Handwriting Data...")
+#     custom_data = np.loadtxt('data/my_handwriting.csv', delimiter=',', skiprows=1)
     
-    # Glue your custom drawings to the bottom of the MNIST dataset
-    data = np.vstack((data, custom_data))
-    print(f"Added custom images to the training pool!")
-# The first column is the label (0-9), the rest are the 784 pixels
+#     # Glue your custom drawings to the bottom of the MNIST dataset
+#     data = np.vstack((data, custom_data))
+#     print(f"Added custom images to the training pool!")
+# # The first column is the label (0-9), the rest are the 784 pixels
+
+print("Loading ONLY Custom Handwriting Data...")
+data = np.loadtxt('data/my_handwriting.csv', delimiter=',', skiprows=1)
+
 X = data[:, 1:]
 y_raw = data[:, 0].astype(int)
 
@@ -59,7 +63,7 @@ optimizer = SGD(learning_rate=0.1)
 
 # --- 3. TRAINING LOOP WITH MINI-BATCHES ---
 epochs = 50
-batch_size = 128 # Process 128 images at a time
+batch_size = 16 # Process 128 images at a time
 epoch_history, loss_history, accuracy_history = [], [], []
 
 print("Starting Deep Learning Training...\n")
